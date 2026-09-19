@@ -10,17 +10,24 @@ burned-in captions and a credits card.
 
 ## 1. The pipeline agents
 
-The pipeline is six single-responsibility stages. Each is a module in
-`scripts/`, each reads the previous stage's JSON output and writes its own, and
-each is runnable on its own. Nothing holds state in memory between stages, so
-any stage can be re-run without repeating the expensive ones.
+The pipeline is six single-responsibility stages plus an optional curation
+step. Each is a module in `scripts/`, each reads the previous stage's JSON
+output and writes its own, and each is runnable on its own. Nothing holds state
+in memory between stages, so any stage can be re-run without repeating the
+expensive ones.
 
 ```
-discover ──► fetch ──► process ──► subtitles ──► editor ──► metadata
-   │           │          │            │            │          │
-candidates  assets      clips      subtitles     renders    <name>.md
-  .json      .json      .json        .json        *.mp4     (upload text)
+discover ──► curate ──► fetch ──► process ──► subtitles ──► editor ──► metadata
+   │           │          │          │            │            │          │
+candidates  curated   assets      clips      subtitles     renders    <name>.md
+  .json    candidates  .json      .json        .json        *.mp4     (upload text)
+            .json
 ```
+
+`python main.py run` currently runs through the `subtitles` stage and stops
+before `process`/`edit`. Run those stages separately (or invoke every stage
+one-by-one) to produce the final `output/compilation-<timestamp>.mp4` and
+matching `.md`.
 
 | # | Agent | Module | Responsibility |
 |---|-------|--------|----------------|
@@ -300,7 +307,7 @@ cp .env.example .env             # optional: add YOUTUBE_API_KEY
 ```
 
 ```bash
-python main.py run                       # full pipeline
+python main.py run                       # discover, curate, fetch and subtitle
 python main.py run --limit 4 --clip-seconds 6
 python main.py run --landscape --no-captions
 python main.py run --source file          # only clips listed in sources.txt

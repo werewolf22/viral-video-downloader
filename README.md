@@ -5,13 +5,15 @@ and assembles them into a single vertical compilation with burned-in captions,
 a title card and a credits card.
 
 ```
-discover ──► fetch ──► process ──► subtitles ──► editor ──► metadata
-  rank      download   cut the     transcribe    burn in    title, tags,
- by speed   + credits  loud part   into cues     + join     credits
+discover ──► curate ──► fetch ──► process ──► subtitles ──► editor ──► metadata
+  rank      optional   download   cut the     transcribe    burn in    title, tags,
+ by speed     LLM     + credits  loud part   into cues     + join     credits
 ```
 
-Output: `output/compilation-<timestamp>.mp4` plus a matching `.md` with the
-title, tags, chapter timestamps and credits ready to paste into a description.
+`python main.py run` currently executes the first four stages (discover,
+curate, fetch, subtitles). The final video and matching `.md` description are
+produced by the `process` and `edit` stages, which can be run separately or as
+part of a full stage-by-stage invocation.
 
 ## Install
 
@@ -19,6 +21,7 @@ title, tags, chapter timestamps and credits ready to paste into a description.
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 sudo apt install ffmpeg            # ffmpeg + ffprobe are required
+# yt-dlp also needs node (or deno) on PATH to solve YouTube stream signatures.
 ```
 
 Optional credentials:
@@ -43,7 +46,7 @@ cp .env.example .env               # add YouTube Data API v3 and/or Twitch keys
 ## Run
 
 ```bash
-python main.py run                       # full pipeline
+python main.py run                       # discover, curate, fetch and subtitle
 python main.py run --limit 4             # 4 clips instead of 6
 python main.py run --clip-seconds 6
 python main.py run --landscape           # 1920x1080 instead of 9:16
@@ -53,6 +56,10 @@ python main.py run --source twitch        # Twitch clips instead of YouTube
 python main.py run --source music_video   # viral music VIDEO clips from YouTube
 python main.py run --source instagram     # Instagram Reels with music (manual / Apify)
 python main.py run --query "skateboard fails" --query "cat fails"
+
+# run currently stops after subtitles; finish the final video with:
+python main.py process                   # cut highlights and normalize clips
+python main.py edit                      # assemble title card, clips and credits
 ```
 
 Each stage also runs on its own, reading the previous stage's output from
