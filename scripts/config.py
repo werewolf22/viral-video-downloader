@@ -37,16 +37,73 @@ class DiscoveryConfig:
     license_filter: str = "any"
     blocked_channels: list[str] = field(default_factory=list)
     blocked_keywords: list[str] = field(default_factory=list)
+    # When enabled, the LLM writes fresh search queries for every run instead of
+    # replaying the static list below. This is the fastest way to stop the pipeline
+    # from returning the same videos every time.
+    llm_query_enabled: bool = False
+    llm_query_theme: str = "viral, surprising, funny, satisfying or caught-on-camera moments trending this week"
+    llm_query_count: int = 10
+    llm_query_temperature: float = 0.7
 
 
 @dataclass
 class DownloadConfig:
-    # yt-dlp format selector; caps at 1080p so downloads stay a sane size.
-    format: str = "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080]/b"
+    # Default yt-dlp format selector. The pipeline can also ask an LLM to pick
+    # a format from the available list when the default selector is rejected.
+    format: str = "bestvideo[ext=mp4][vcodec^=avc1][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/b[height<=1080]/b"
     max_filesize_mb: int = 500
     retries: int = 3
     cookies_from_browser: str | None = None
     rate_limit: str | None = None
+    # If true and yt-dlp reports "Requested format is not available", fetch the
+    # format list, feeds it to the LLM, and downloads the format the LLM picks.
+    llm_format_fallback: bool = True
+
+
+@dataclass
+class TwitchConfig:
+    # Twitch Helix API credentials are read from TWITCH_CLIENT_ID and
+    # TWITCH_CLIENT_SECRET in .env. discovery.source: twitch uses these to
+    # fetch trending clips by game/category and view count.
+    enabled: bool = False
+    game_name: str | None = None
+    period: str = "week"  # day | week | month | all
+    language: str | None = None  # e.g. "en"
+    # Future manual source; not wired in the first API-only pass.
+    sources_file: str = "twitch_sources.txt"
+
+
+@dataclass
+class MusicVideoConfig:
+    # Music VIDEO clip mode. discovery.source: music_video uses these settings
+    # to surface viral clips that contain music + video (Shorts, music videos,
+    # trending songs with visuals). Results are always videos, never audio-only.
+    enabled: bool = False
+    genres: list[str] = field(default_factory=lambda: ["pop", "hip hop", "electronic", "rock"])
+    queries: list[str] = field(default_factory=lambda: [
+        "viral music video",
+        "trending song video",
+        "popular music clip",
+    ])
+    use_shorts: bool = True
+
+
+@dataclass
+class InstagramConfig:
+    # Instagram Reels/clip discovery. The API has no free viral endpoint, so
+    # this supports a manual URL file or a third-party backend (Apify).
+    # Everything here targets clips WITH music/video, never static photos.
+    enabled: bool = False
+    backend: str = "manual"  # manual | apify
+    sources_file: str = "instagram_sources.txt"
+    api_key: str | None = None
+    base_url: str | None = "https://api.apify.com/v2"
+    actor_id: str | None = None  # e.g. "apify/instagram-scraper"
+    # Music-video hashtags to scrape, e.g. ["viralmusic", "musicvideo"].
+    hashtags: list[str] = field(default_factory=lambda: ["viralmusic"])
+    # Free-form search terms the Apify actor may support.
+    queries: list[str] = field(default_factory=list)
+    max_results: int = 50
 
 
 @dataclass
@@ -82,14 +139,15 @@ class CaptionConfig:
     engine: str = "auto"  # "auto" | "faster-whisper" | "whisper" | "none"
     model: str = "base"
     language: str | None = None
-    max_chars_per_line: int = 24
+    max_chars_per_line: int = 22
     max_lines: int = 2
     font: str = "DejaVu Sans"
-    font_size: int = 20
-    margin_v: int = 260
-    primary_colour: str = "&H00FFFFFF"
+    # font_size, margin_v and outline are pixels at the configured render size.
+    font_size: int = 72
+    margin_v: int = 280
+    primary_colour: str = "&H00FFFFFF"  # ASS colours are &HAABBGGRR
     outline_colour: str = "&H00000000"
-    outline: int = 3
+    outline: int = 6
 
 
 @dataclass
@@ -105,9 +163,26 @@ class BrandingConfig:
 
 
 @dataclass
+class CuratorConfig:
+    # Optional LLM curation between discovery and fetch.
+    enabled: bool = False
+    provider: str = "ollama"  # "ollama" | "openai" | any OpenAI-compatible
+    base_url: str = "http://localhost:11434/v1"
+    model: str = "deepseek-v4-flash:cloud"
+    api_key: str | None = None
+    max_candidates: int = 20      # how many discovery results the LLM reviews
+    temperature: float = 0.3
+    max_tokens: int = 4096
+    timeout: int = 120
+
+
+@dataclass
 class PathsConfig:
     workspace: str = "workspace"
     downloads: str = "workspace/downloads"
+    twitch_downloads: str = "workspace/downloads_twitch"
+    youtube_music_downloads: str = "workspace/downloads_music_video"
+    instagram_downloads: str = "workspace/downloads_instagram"
     clips: str = "workspace/clips"
     subtitles: str = "workspace/subtitles"
     renders: str = "workspace/renders"
@@ -118,13 +193,20 @@ class PathsConfig:
 class Config:
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     download: DownloadConfig = field(default_factory=DownloadConfig)
+    twitch: TwitchConfig = field(default_factory=TwitchConfig)
+    music_video: MusicVideoConfig = field(default_factory=MusicVideoConfig)
+    instagram: InstagramConfig = field(default_factory=InstagramConfig)
     highlight: HighlightConfig = field(default_factory=HighlightConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
     captions: CaptionConfig = field(default_factory=CaptionConfig)
     branding: BrandingConfig = field(default_factory=BrandingConfig)
+    curator: CuratorConfig = field(default_factory=CuratorConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
 
     youtube_api_key: str | None = None
+    twitch_client_id: str | None = None
+    twitch_client_secret: str | None = None
+    instagram_api_key: str | None = None
     root: Path = field(default_factory=lambda: PROJECT_ROOT)
 
     # -- derived paths -----------------------------------------------------
@@ -187,4 +269,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> Config:
 
     _load_dotenv(cfg.root)
     cfg.youtube_api_key = os.environ.get("YOUTUBE_API_KEY") or cfg.youtube_api_key
+    cfg.twitch_client_id = os.environ.get("TWITCH_CLIENT_ID") or cfg.twitch_client_id
+    cfg.twitch_client_secret = os.environ.get("TWITCH_CLIENT_SECRET") or cfg.twitch_client_secret
+    cfg.instagram_api_key = os.environ.get("INSTAGRAM_API_KEY") or cfg.instagram_api_key
     return cfg

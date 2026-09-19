@@ -1,0 +1,16 @@
+# Core pipeline
+yt-dlp>=2024.8.6          # downloads; update often, extractors break with YouTube changes
+PyYAML>=6.0               # config.yaml
+requests>=2.31            # YouTube Data API v3 calls
+numpy>=1.26               # audio-energy highlight detection
+
+# Captions - install one. faster-whisper is ~4x quicker on CPU.
+faster-whisper>=1.0.3
+# openai-whisper>=20231117
+
+# System requirements (not installable via pip):
+#   ffmpeg + ffprobe               ->  sudo apt install ffmpeg
+#   node (or deno) for yt-dlp      ->  yt-dlp uses it to solve YouTube's
+#                                      stream-signature challenges. node is
+#                                      usually already on PATH; otherwise:
+#                                      sudo apt install nodejs

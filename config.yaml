@@ -1,0 +1,154 @@
+# Pipeline configuration. Every key mirrors a dataclass in scripts/config.py,
+# and CLI flags on main.py override whatever is set here.
+
+discovery:
+  # youtube_api  - richest signals, needs YOUTUBE_API_KEY in .env
+  # ytdlp_search - no API key required, fewer signals
+  # file         - read URLs from sources.txt (you pick every clip)
+  source: ytdlp_search
+  region: US
+  category_id: null          # e.g. "23" comedy, "24" entertainment, "17" sport
+  search_queries:
+    - funny fails this week
+    - unexpected moments caught on camera
+    - satisfying skill clips
+  sources_file: sources.txt
+  max_candidates: 50
+  max_results: 6             # clips in the finished compilation
+  min_views: 100000
+  min_duration_sec: 15
+  max_duration_sec: 900
+  published_within_hours: 168
+  # "any" or "creativeCommon". creativeCommon restricts results to videos that
+  # are licensed for reuse with attribution - see the note in README.md.
+  license_filter: any
+  blocked_channels: []
+  blocked_keywords:
+    - trailer
+    - full episode
+  # Let the LLM generate fresh search queries each run. Greatly reduces
+  # repetition and surfaces currently-trending clips. Requires the curator
+  # block below (provider/model/base_url) to be configured.
+  llm_query_enabled: true
+  llm_query_theme: "viral, surprising, funny, satisfying or caught-on-camera moments trending this week"
+  llm_query_count: 10
+  llm_query_temperature: 0.7
+
+download:
+  # Prefer H.264 MP4 video + AAC audio: every editor/concat path handles it
+  # natively. Fallbacks gracefully if only AV1/VP9 or a single combined stream
+  # is available. YouTube's anti-bot throttling is less aggressive on these
+  # older, more common formats than on newer DASH/AV1 streams.
+  format: "bestvideo[ext=mp4][vcodec^=avc1][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/b[height<=1080]/b"
+  max_filesize_mb: 500
+  retries: 3
+  cookies_from_browser: null # "chrome" / "firefox" when YouTube demands sign-in
+  rate_limit: null           # e.g. "2M"
+  # Ask the LLM to pick from yt-dlp's reported available formats when the
+  # default selector is rejected. Disable to let those downloads fail fast.
+  llm_format_fallback: true
+
+twitch:
+  # Set discovery.source: twitch to find viral Twitch clips via the Helix API.
+  # Requires TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in .env.
+  enabled: false
+  game_name: null            # e.g. "Just Chatting"; null = any game/category
+  period: week               # day | week | month | all
+  language: null             # e.g. "en"
+  sources_file: twitch_sources.txt
+
+music_video:
+  # Music VIDEO clip mode for discovery.source: music_video.
+  # Searches always include a visual term ("video", "shorts", "clip"), so
+  # results are videos with music, never audio-only tracks.
+  enabled: false
+  genres:
+    - pop
+    - hip hop
+    - electronic
+    - rock
+  queries:
+    - viral music video
+    - trending song video
+    - popular music clip
+  use_shorts: true           # append "shorts" to generated music-video queries
+
+instagram:
+  # Instagram Reels/clip discovery. The API has no free viral endpoint, so this
+  # supports a manual URL file or a third-party backend (Apify).
+  # Configure music-video hashtags/search terms so results are Reels with
+  # music + video, never static-photo posts.
+  enabled: false
+  backend: manual            # manual | apify
+  sources_file: instagram_sources.txt
+  api_key: null              # or INSTAGRAM_API_KEY in .env
+  base_url: https://api.apify.com/v2
+  actor_id: null             # e.g. "apify/instagram-scraper"
+  hashtags:
+    - viralmusic              # music-video Reels
+  queries: []                # extra search terms for Apify actors that support them
+  max_results: 50
+
+highlight:
+  clip_seconds: 8.0
+  method: audio_energy       # audio_energy | scene | start
+  skip_intro_sec: 3.0
+  skip_outro_sec: 3.0
+  scene_threshold: 0.35
+
+render:
+  width: 1080                # 9:16 for Shorts / Reels / TikTok
+  height: 1920
+  fps: 30
+  fit: blur_pad              # blur_pad | crop | pad
+  loudness_lufs: -14.0       # YouTube's normalization target
+  crf: 20
+  preset: veryfast
+  audio_bitrate: 192k
+  transition: fade           # none | fade
+  transition_seconds: 0.35
+
+captions:
+  enabled: true
+  engine: auto               # auto | faster-whisper | whisper | none
+  model: base                # tiny | base | small | medium | large-v3
+  language: null             # null = autodetect
+  max_chars_per_line: 22
+  max_lines: 2
+  font: DejaVu Sans
+  # Pixels at the render size below - the .ass track declares a matching canvas.
+  font_size: 72
+  margin_v: 280              # distance from the bottom; clears platform UI
+  outline: 6
+
+curator:
+  enabled: false
+  provider: ollama              # ollama | openai | any OpenAI-compatible /v1
+  base_url: http://localhost:11434/v1
+  model: deepseek-v4-flash:cloud  # or llama3.1, qwen2.5, gpt-4o-mini, etc.
+  api_key: null                 # only needed for cloud providers
+  max_candidates: 20            # how many discovery results the LLM reviews
+  temperature: 0.3
+  max_tokens: 4096
+  timeout: 120
+
+branding:
+  title_card_text: "TOP MOMENTS\nOF THE WEEK"
+  title_card_seconds: 2.0
+  clip_label: true
+  watermark_text: null       # e.g. "@yourchannel"
+  outro_credits: true
+  outro_seconds: 3.5
+  font_file: null            # null = autodetect a system font
+  accent_colour: "#FF2D55"
+
+paths:
+  workspace: workspace
+  downloads: workspace/downloads
+  twitch_downloads: workspace/downloads_twitch
+  youtube_music_downloads: workspace/downloads_music_video
+  instagram_downloads: workspace/downloads_instagram
+  clips: workspace/clips
+  subtitles: workspace/subtitles
+  renders: workspace/renders
+  output: output
